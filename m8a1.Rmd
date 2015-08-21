@@ -1,0 +1,125 @@
+---
+title: "Practical Machine Learning"
+author: "Goh Shen Tat"
+date: "Friday, August 21, 2015"
+output: html_document
+---
+
+#Synopsis
+
+###Background
+
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement – a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, your goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. More information is available from the website here: http://groupware.les.inf.puc-rio.br/har (see the section on the Weight Lifting Exercise Dataset). 
+
+###Data 
+
+The training data for this project are available here: 
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv
+The test data are available here: 
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv
+The data for this project come from this source: http://groupware.les.inf.puc-rio.br/har.  
+
+
+#Data Processing
+
+###Loading required libraries
+```{r}
+library(caret)
+library(randomForest)
+```
+
+###data download
+Training and Testing Data is downloaded
+```{r}
+#Downloading the training data set
+url1 <- "http://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+download.file(url1, destfile="pml-training.csv")
+data_training <- read.csv("pml-training.csv", header=TRUE, na.strings=c("NA","#DIV/0!", ""))
+
+#Downloading the testing data set
+url2 <- "http://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+download.file(url2, destfile="pml-testing.csv")
+data_testing <- read.csv("pml-testing.csv", header=TRUE, na.strings=c("NA","#DIV/0!", ""))
+```
+
+###data cleaning
+NA and blanks were dropped.
+```{r}
+#NA and blanks were dropped
+data_training <- data_training[,colSums(is.na(data_training))==0]
+data_testing <- data_testing[,colSums(is.na(data_testing))==0]
+```
+
+the following irrelevant fields were dropped
+* the unlabled row index
+
+* user_name
+
+* raw_timestamp_part_1 
+
+* raw_timestamp_part_2
+
+* cvtd_timestamp
+
+* new_window
+
+* num_window
+```{r}
+#irrelevant fields were dropped
+data_training <- data_training[,-c(1:7)]
+data_testing <- data_testing[,-c(1:7)]
+
+#view datasets
+dim(data_training)
+dim(data_testing)
+```
+The training data set contains 53 variables and 19622 obs.
+The testing data set contains 53 variables and 20 obs.
+
+#doing cross validation 
+Cross validation was achieved by splitting the training data.
+
+The training data set will be partitioned into 2 sets: sub_training (70%) and sub_testing (30%), using random subsampling without replacement.
+
+```{r}
+sub_sample <- createDataPartition(y=data_training$classe, p=0.7, list=FALSE)
+sub_training <- data_training[sub_sample, ] 
+sub_testing <- data_training[-sub_sample, ]
+
+#view subsets
+dim(sub_training)
+dim(sub_testing)
+```
+The sub_training data set contains 53 variables and 13737 obs.
+The sub_testing data set contains 53 variables and 5885 obs.
+
+#builing prediction model
+The Random Forest was used to perform the prediction.
+```{r}
+set.seed(1234)
+model_predict <- randomForest(classe ~. , data=sub_training, method="class")
+prediction <- predict(model_predict, sub_testing, type = "class")
+
+#test results on sub_testing:
+out <- confusionMatrix(prediction, sub_testing$classe)
+print(out)
+```
+Using Random Forest model, Accuracy was 0.9956 (95% CI: (0.9935, 0.9971)). The expected out-of-sample error is estimated at 0.0044 or 0.44%.
+The expected out-of-sample error is calculated as (1-accuracy) for predictions made against the cross-validation set. With an accuracy above 99% on our cross-validation data, we can expect that very small number of test samples will be classified wrongly.
+
+#generating submission
+```{r}
+#predict outcome on given test set
+model_predict_result <- predict(model_predict, data_testing, type="class")
+
+#output files
+pml_write_files = function(x){
+  n = length(x)
+  for(i in 1:n){
+    filename = paste0("problem_id_",i,".txt")
+    write.table(x[i],file=filename,quote=FALSE,row.names=FALSE,col.names=FALSE)
+  }
+}
+
+pml_write_files(model_predict_result)
+```
